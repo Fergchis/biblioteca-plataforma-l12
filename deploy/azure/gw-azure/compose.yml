@@ -1,0 +1,25 @@
+# gw-azure (E3): frontend+Caddy (una sola imagen) y el gateway, los dos con network_mode: host.
+# Caddy atiende 80 y 443 de la maquina y pasa /v1/* al gateway en 127.0.0.1:8080.
+# Las imagenes salen de deploy/versiones.env (FRONTEND y GATEWAY); los valores del gateway, de
+# /opt/biblioteca/secretos/gw-azure.env, que vive en la maquina y no en el repositorio.
+# Se levanta con:  docker compose --env-file versiones.env up -d   (lo hace el job azure de desplegar.yml)
+# NUNCA 'down -v': el volumen caddy-data guarda el certificado de Let's Encrypt.
+name: gw-azure
+services:
+  frontend:
+    image: ${FRONTEND:?falta FRONTEND en versiones.env}
+    network_mode: host
+    restart: unless-stopped
+    environment:
+      DOMINIO: biblioteca-fergchis-l10.northcentralus.cloudapp.azure.com
+    volumes:
+      - caddy-data:/data
+      - caddy-config:/config
+  gateway:
+    image: ${GATEWAY:?falta GATEWAY en versiones.env}
+    network_mode: host
+    restart: unless-stopped
+    env_file: /opt/biblioteca/secretos/gw-azure.env
+volumes:
+  caddy-data:
+  caddy-config:

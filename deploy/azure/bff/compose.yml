@@ -1,0 +1,12 @@
+# bff (E3): biblioteca-bff en el 3000 de 10.1.2.4. Solo lo alcanza la VNet (nsg-bff); el gateway de
+# gw-azure lo llama por http://10.1.2.4:3000. El BFF llama a AWS por https://<eip>.sslip.io y sale a
+# internet por el NAT de gw-azure. La imagen sale de deploy/versiones.env (BFF); los valores, de
+# /opt/biblioteca/secretos/bff.env, que vive en la maquina y no en el repositorio.
+name: bff
+services:
+  bff:
+    image: ${BFF:?falta BFF en versiones.env}
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    env_file: /opt/biblioteca/secretos/bff.env
