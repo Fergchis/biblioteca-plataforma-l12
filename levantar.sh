@@ -64,6 +64,7 @@ comprobar 200 http://localhost:3002/prestamos
 comprobar 200 http://localhost:3010/salud
 comprobar 200 http://localhost:3010/panel/en-vivo
 comprobar 401 http://localhost:3020/v1/admin/colas
+comprobar 401 http://localhost:3020/v1/admin/kafka/topics
 comprobar 200 http://localhost:8085/actuator/health
 
 docker compose ps --format "table {{.Name}}\t{{.Status}}"

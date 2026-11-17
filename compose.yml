@@ -199,10 +199,18 @@ services:
       RABBIT_ADMIN_URL: http://rabbit1:15672
       RABBIT_USUARIO: ${RABBITMQ_USER}
       RABBIT_CLAVE: ${RABBITMQ_PASSWORD}
+      # E3: las 7 rutas de /v1/admin/kafka.
+      KAFKA_BROKERS: broker-1:19092,broker-2:19092,broker-3:19092
     ports:
       - "3020:3020"
     depends_on:
       rabbit1:
+        condition: service_healthy
+      broker-1:
+        condition: service_healthy
+      broker-2:
+        condition: service_healthy
+      broker-3:
         condition: service_healthy
     healthcheck:
       # Todas las rutas del administrador exigen token: se comprueba que el puerto este abierto.
