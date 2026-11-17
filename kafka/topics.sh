@@ -34,10 +34,18 @@ crear() {
 
 crear biblioteca.prestamos delete "$SIETE_DIAS"
 crear biblioteca.lecturas delete "$UN_DIA"
-crear biblioteca.prestamos.dlt delete "$SIETE_DIAS"
-crear biblioteca.lecturas.dlt delete "$SIETE_DIAS"
 # L10, grupos de 3: el ultimo estado de cada libro (key libroId), compactado.
 crear biblioteca.catalogo compact
+
+# E3, paso 1: un .dlt por cada topic que lee biblioteca-eventos. Ahi publica la aplicacion cada evento que un
+# grupo no puede procesar (header x-motivo). 3 particiones, igual que el original: con la misma key y el mismo
+# particionador, el desviado cae en la misma particion que el original. 3 replicas y min.insync.replicas=2: un
+# evento desviado es un evento que nadie mas tiene, no puede vivir en una sola copia. 7 dias y delete: el plazo
+# para revisarlo y reprocesarlo; son pocos mensajes, el plazo largo no cuesta. El del catalogo tambien es delete:
+# guarda cada error, no el ultimo de cada libro.
+crear biblioteca.prestamos.dlt delete "$SIETE_DIAS"
+crear biblioteca.lecturas.dlt delete "$SIETE_DIAS"
+crear biblioteca.catalogo.dlt delete "$SIETE_DIAS"
 
 docker compose exec -T "$SERVICIO" /opt/kafka/bin/kafka-topics.sh \
   --bootstrap-server "$BOOTSTRAP" --describe --topics-with-overrides --exclude-internal
