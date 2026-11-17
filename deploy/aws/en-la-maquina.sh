@@ -81,9 +81,12 @@ case "$PIEZA" in
     ;;
   gestion)
     solo gestion
+    aws ssm get-parameter --with-decryption --name /biblioteca/gestion/env \
+      --query Parameter.Value --output text > "$SECRETOS/gestion.env"
+    chmod 600 "$SECRETOS/gestion.env"
     cd "$DEPLOY/gestion"
-    docker compose up -d --wait --quiet-pull
-    docker compose ps --format '{{.Name}}  {{.Status}}'
+    docker compose --env-file ../../versiones.env up -d --wait --quiet-pull
+    docker compose --env-file ../../versiones.env ps --format '{{.Name}}  {{.Image}}  {{.Status}}'
     ;;
   simulador)
     solo gestion

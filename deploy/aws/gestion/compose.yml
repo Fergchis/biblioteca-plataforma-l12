@@ -1,9 +1,9 @@
-# Kafka UI en la EC2 gestion (10.0.11.20), conectado a los tres brokers de mq-1 a mq-3. Sin secretos.
-# Llega por S3 a /opt/biblioteca/deploy/aws/gestion/. En gestion, por Session Manager:
-#   cd /opt/biblioteca/deploy/aws/gestion
-#   sudo docker compose up -d --wait
-# sg-gestion no abre ningún puerto: Kafka UI se mira desde el equipo con un túnel de Session Manager
-# (deploy/aws/05-tunel.sh), en http://localhost:18085 (el 8085 es el del compose local).
+# Kafka UI y biblioteca-admin en la EC2 gestion (10.0.11.20). El runner aws de GitHub Actions también vive
+# aquí, pero como servicio del sistema (no en este compose).
+# La imagen de admin sale de deploy/versiones.env; sus valores, de /opt/biblioteca/secretos/gestion.env
+# (parámetro /biblioteca/gestion/env). Lo levanta el job aws de .github/workflows/desplegar.yml.
+# sg-gestion no abre ningún puerto, y los dos escuchan solo en 127.0.0.1: se abren desde el equipo con un
+# túnel de Session Manager (deploy/aws/05-tunel.sh): Kafka UI en localhost:18085 y admin en localhost:13020.
 
 name: biblioteca-gestion
 
@@ -11,7 +11,7 @@ services:
   kafka-ui:
     image: ghcr.io/kafbat/kafka-ui:v1.5.0
     restart: unless-stopped
-    ports: ["8080:8080"]
+    ports: ["127.0.0.1:8080:8080"]
     environment:
       KAFKA_CLUSTERS_0_NAME: biblioteca-aws
       KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: 10.0.21.11:9092,10.0.22.12:9092,10.0.21.13:9092
@@ -21,4 +21,21 @@ services:
       interval: 5s
       timeout: 3s
       retries: 40
+      start_period: 20s
+
+  admin:
+    image: ${ADMIN:?falta ADMIN en versiones.env}
+    restart: unless-stopped
+    init: true
+    env_file: /opt/biblioteca/secretos/gestion.env
+    environment:
+      KAFKA_BROKERS: 10.0.21.11:9092,10.0.22.12:9092,10.0.21.13:9092
+      RABBIT_ADMIN_URL: http://10.0.21.11:15672
+    ports: ["127.0.0.1:3020:3020"]
+    healthcheck:
+      # Todas las rutas exigen token: se comprueba que el puerto esté abierto.
+      test: ["CMD", "node", "-e", "process.getBuiltinModule('node:net').connect(3020, '127.0.0.1').on('connect', () => process.exit(0)).on('error', () => process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
       start_period: 20s

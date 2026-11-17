@@ -19,7 +19,7 @@ comprobar_cuenta
 T0=$(date +%s)
 sin_crlf nat-user-data.sh docker-user-data.sh
 
-MAQUINAS=("$@"); [ ${#MAQUINAS[@]} -gt 0 ] || MAQUINAS=(mq-1 mq-2 mq-3 datos gestion)
+MAQUINAS=("$@"); [ ${#MAQUINAS[@]} -gt 0 ] || MAQUINAS=(mq-1 mq-2 mq-3 datos gestion servicios gw-aws)
 AMI=$(aws_ ssm get-parameters --names /aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-x86_64 \
   --query 'Parameters[0].Value' --output text)
 log "AMI Amazon Linux 2023: $AMI"
@@ -68,7 +68,17 @@ for m in "${MAQUINAS[@]}"; do
     datos)     lanzar "$m" t3.small datos-a sg-datos docker-user-data.sh 12 no > /dev/null;;
     gestion)   lanzar "$m" t3.medium aplicacion sg-gestion docker-user-data.sh 12 no > /dev/null;;
     nat) ;;
-    gw-aws|servicios) log "$m es de la E3: no se crea aquí";;
+    servicios) lanzar "$m" t3.medium aplicacion sg-servicios docker-user-data.sh 16 no > /dev/null;;
+    gw-aws)
+      GW=$(lanzar "$m" t3.small publica sg-gw docker-user-data.sh 12 si)
+      aws ec2 wait instance-running --instance-ids "$GW"
+      ALOC=$(aws_ ec2 describe-addresses --filters $(filtros gw-aws) --query 'Addresses[0].AllocationId' --output text)
+      if [ "$ALOC" = None ]; then
+        ALOC=$(aws_ ec2 allocate-address --domain vpc --tag-specifications "$(etiquetas elastic-ip gw-aws)" \
+          --query AllocationId --output text)
+      fi
+      aws ec2 associate-address --allocation-id "$ALOC" --instance-id "$GW" > /dev/null
+      log "gw-aws $GW con Elastic IP $(aws_ ec2 describe-addresses --allocation-ids "$ALOC" --query 'Addresses[0].PublicIp' --output text)";;
     *) log "máquina desconocida: $m"; exit 1;;
   esac
 done
@@ -76,7 +86,7 @@ done
 # 3 · que cada una aparezca en Session Manager y tenga Docker (lo baja por nat)
 esperar_ssm nat && log "nat Online en Session Manager"
 for m in "${MAQUINAS[@]}"; do
-  case "$m" in nat|gw-aws|servicios) continue;; esac
+  case "$m" in nat) continue;; esac
   esperar_ssm "$m"
   en_maquina "$m" 'for i in $(seq 1 60); do docker compose version > /dev/null 2>&1 && break; sleep 5; done
 echo "$(hostname) $(docker --version | cut -d, -f1) · $(docker compose version) · $(free -m | awk "/Mem/ {print \$2}") MB"'

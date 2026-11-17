@@ -1,0 +1,28 @@
+# Caddy de gw-aws. SITIO es la Elastic IP con guiones + .sslip.io (184-193-87-203.sslip.io) y ACME_CA la CA
+# de Let's Encrypt: los dos vienen de /opt/biblioteca/secretos/gw-aws.env. La primera vez ACME_CA apunta a
+# staging; cuando sale el certificado de prueba se cambia a producción y se reinicia Caddy una vez.
+# NUNCA docker compose down -v en gw-aws: el volumen /data guarda los certificados.
+# sg-gw deja entrar el 80 desde internet (desafío HTTP-01) y el 443 solo desde la IP pública de gw-azure.
+{
+	acme_ca {$ACME_CA}
+}
+
+{$SITIO} {
+	# La API con token, por el gateway de gw-aws
+	handle /v1/* {
+		reverse_proxy 127.0.0.1:8080
+	}
+	# Lo que piden el gateway y el bff de Azure, directo a servicios (cada servicio valida el token)
+	handle /libros* {
+		reverse_proxy 10.0.11.10:3001
+	}
+	handle /prestamos* {
+		reverse_proxy 10.0.11.10:3002
+	}
+	handle_path /eventos/* {
+		reverse_proxy 10.0.11.10:3010
+	}
+	handle {
+		respond "no encontrado" 404
+	}
+}

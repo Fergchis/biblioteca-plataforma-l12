@@ -1,0 +1,53 @@
+# biblioteca-libros, biblioteca-prestamos y biblioteca-eventos en la EC2 servicios (10.0.11.10).
+# Las imágenes salen de deploy/versiones.env; los valores, de /opt/biblioteca/secretos/servicios.env, que la
+# máquina escribe desde el parámetro /biblioteca/servicios/env (SecureString) al desplegar. Lo levanta el
+# job aws de .github/workflows/desplegar.yml; a mano, en servicios, por Session Manager:
+#   cd /opt/biblioteca/deploy/aws/servicios
+#   sudo docker compose --env-file ../../versiones.env up -d --wait
+# sg-servicios abre 3001, 3002 y 3010 solo a sg-gw y sg-gestion.
+
+name: biblioteca-servicios
+
+x-node: &node
+  restart: unless-stopped
+  init: true
+  env_file: /opt/biblioteca/secretos/servicios.env
+  environment:
+    KAFKA_BROKERS: 10.0.21.11:9092,10.0.22.12:9092,10.0.21.13:9092
+    POSTGRES_HOST: 10.0.21.30
+    POSTGRES_PORT: "5432"
+
+services:
+  libros:
+    <<: *node
+    image: ${LIBROS:?falta LIBROS en versiones.env}
+    ports: ["3001:3001"]
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://localhost:3001/libros').then((r) => process.exit(r.ok ? 0 : 1), () => process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 10s
+
+  prestamos:
+    <<: *node
+    image: ${PRESTAMOS:?falta PRESTAMOS en versiones.env}
+    ports: ["3002:3002"]
+    healthcheck:
+      # GET /prestamos exige token: basta con que el puerto responda.
+      test: ["CMD", "node", "-e", "process.getBuiltinModule('node:net').connect(3002, '127.0.0.1').on('connect', () => process.exit(0)).on('error', () => process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 20s
+
+  eventos:
+    <<: *node
+    image: ${EVENTOS:?falta EVENTOS en versiones.env}
+    ports: ["3010:3010"]
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://localhost:3010/salud').then((r) => process.exit(r.ok ? 0 : 1), () => process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 20s

@@ -46,7 +46,31 @@ if [ ! -f secretos/datos.env ]; then
   sed -e "s/^POSTGRES_PASSWORD=.*/POSTGRES_PASSWORD=$(clave 12)/" secretos/datos.env.example > secretos/datos.env
   log "secretos/datos.env creado con una clave aleatoria"
 fi
-for m in mq-1 mq-2 datos; do
+# E3 · servicios, gestion y gw-aws: se arman una vez a partir de los secretos de la E2 y de Cognito
+# (COGNITO_ISSUER y COGNITO_CLIENT_ID, los que imprime cognito/crear.sh). Si ya existen, no se tocan.
+. secretos/mq-1.env; . secretos/datos.env
+AMQP="amqp://$RABBITMQ_USER:$RABBITMQ_PASSWORD@10.0.21.11:5672"
+if [ ! -f secretos/servicios.env ]; then
+  : "${COGNITO_ISSUER:?falta COGNITO_ISSUER (lo imprime cognito/crear.sh)}"
+  printf '%s\n' "COGNITO_ISSUER=$COGNITO_ISSUER" "RABBITMQ_URL=$AMQP" "POSTGRES_DB=$POSTGRES_DB" \
+    "POSTGRES_USER=$POSTGRES_USER" "POSTGRES_PASSWORD=$POSTGRES_PASSWORD" > secretos/servicios.env
+  log "secretos/servicios.env creado"
+fi
+if [ ! -f secretos/gestion.env ]; then
+  : "${COGNITO_CLIENT_ID:?falta COGNITO_CLIENT_ID (lo imprime cognito/crear.sh)}"
+  printf '%s\n' "COGNITO_ISSUER=$COGNITO_ISSUER" "COGNITO_CLIENT_ID=$COGNITO_CLIENT_ID" "RABBIT_URL=$AMQP" \
+    "RABBIT_USUARIO=$RABBITMQ_USER" "RABBIT_CLAVE=$RABBITMQ_PASSWORD" > secretos/gestion.env
+  log "secretos/gestion.env creado"
+fi
+if [ ! -f secretos/gw-aws.env ]; then
+  EIP=$(aws_ ec2 describe-addresses --filters $(filtros gw-aws) --query 'Addresses[0].PublicIp' --output text)
+  # La primera vez, staging. Cuando sale el certificado de prueba se cambia aquí a producción
+  # (https://acme-v02.api.letsencrypt.org/directory), se vuelve a correr este script y se despliega.
+  printf '%s\n' "COGNITO_ISSUER=$COGNITO_ISSUER" "COGNITO_CLIENT_ID=$COGNITO_CLIENT_ID" \
+    "SITIO=${EIP//./-}.sslip.io" "ACME_CA=https://acme-staging-v02.api.letsencrypt.org/directory" > secretos/gw-aws.env
+  log "secretos/gw-aws.env creado (SITIO=${EIP//./-}.sslip.io, CA de staging)"
+fi
+for m in mq-1 mq-2 datos servicios gestion gw-aws; do
   aws ssm put-parameter --type SecureString --overwrite --name "/biblioteca/$m/env" \
     --value "file://secretos/$m.env" > /dev/null
   log "parámetro /biblioteca/$m/env actualizado ($(grep -c '^[A-Z]' "secretos/$m.env") variables)"

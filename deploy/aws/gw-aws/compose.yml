@@ -1,0 +1,34 @@
+# Caddy con HTTPS y biblioteca-gateway en la EC2 gw-aws (10.0.1.20, Elastic IP), los dos con
+# network_mode: host. La imagen del gateway sale de deploy/versiones.env; sus valores y los de Caddy, de
+# /opt/biblioteca/secretos/gw-aws.env (parámetro /biblioteca/gw-aws/env). Lo levanta el job aws de desplegar.yml.
+# NUNCA docker compose down -v aquí: caddy-data guarda el certificado, y cada certificado nuevo descuenta
+# del límite semanal que comparten todos los que usan sslip.io.
+
+name: biblioteca-gw
+
+services:
+  caddy:
+    image: caddy:2.11.7
+    restart: unless-stopped
+    network_mode: host
+    env_file: /opt/biblioteca/secretos/gw-aws.env
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+
+  gateway:
+    image: ${GATEWAY:?falta GATEWAY en versiones.env}
+    restart: unless-stopped
+    init: true
+    network_mode: host
+    env_file: /opt/biblioteca/secretos/gw-aws.env
+    environment:
+      LIBROS_URL: http://10.0.11.10:3001
+      PRESTAMOS_URL: http://10.0.11.10:3002
+      # El panel lo arma el bff de Azure: en AWS el gateway no lo sirve (BFF_URL sin uso).
+      BFF_URL: http://127.0.0.1:9
+
+volumes:
+  caddy-data: {}
+  caddy-config: {}
